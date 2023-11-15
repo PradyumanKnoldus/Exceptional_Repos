@@ -1,0 +1,169 @@
+Managing Corrupted Records - 
+
+.option("badRecordsPath" -> "Path to which we can push it") ---------- Save the curropted records somewhere
+.option("mode" -> "dropMalFormed") ----------- Drop the corrupted records
+.option("mode" -> "FAILFAST") --------- Terminate the spark session as soon as invalid character or any curropted record found
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+map vs mapPartition vs mapPartitionWithIndex
+
+map - it will create instances directly proportional to no. of elements 
+mapPertition - it will create instances directly proportional to no. of partitions ---------- Good for large amount of data
+mapPartitionWithIndex - we can choose which partition we need to process
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Dynamic Header
+
+Suppose we have a text file of Headers only 
+
+val lines = Source,fromFile("Path of Header File").getLines
+val columns = lines.flatMap( f => f.split(",")).toSeq
+
+val df = Defined Any DataFrame
+val dfWithHeader = df.toDF(columns: _*)
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Shuffle Operations
+
+ReduceByKey 
+---------- Uses Map-Reduce function i.e combiner ......that's why it is better in performance
+----- It is better when performing aggregation operation and you need to return the same output type as the source RDD type
+
+GroupByKey 
+---------- Uses compactBuffer which is better than ArrayBuffer
+----- It is better for performing groupBy operations when the data is not distributed across the cluster
+
+CombineByKey 
+---------- it takes 4 parameters (4th one is Optional)
+----- It is better when performing aggregations and you want to have different output type than source RDD. Also, if you want to pass a function as initial value than this function is useful.
+---- (createCombiner) - This is a combiner function for applying aggregations on give KEY - VALUE Pairs. This is similer to (InitialValue) in AggregateByKey 
+---- (mergeValue) - This function will start once there it get value from combiner....and starts matching that value. It also has 2 parameters
+     ---- (value) - New value enters 
+     ---- (accumulater) - incremented by one
+---- (mergeCombiners) - merge all those accumulators across the partitions and generate the final expected result
+---- [numPartitions] - for controlling the partitions of the output RDD (Optional Parameter)
+
+AggregateByKey
+---------- it takes 4 parameters (4th one is Optional), we can return any other type using this
+----- It is better when performing aggregations and you want to have a different output type than source RDD
+---- (InitialValue) - We have to specify this according to our need
+---- (SequenceOperation) - whatever operation we'll give here will be performed within Partition
+---- (CombinerOperation) - whatever operation we'll give here will be performed across Partitions
+---- [numPartitions] = Optional Parameter .... for controlling the partitions of the output RDD
+
+FoldByKey
+----- It is better when performing aggregation operation and oyu need to return the same output type as the source RDD type. Here you get option for specifying the aggregation operation while defining the method.
+
+
+SortByKey
+---------- It takes 2 Parameters
+----- It is usefull when you have to sort the data with its key
+---- (ascending) - Boolean -> true = ascending/ false = descending
+---- [numPartitions] - Optional Parameter
+
+All types of JOINS
+Cogroup
+Distinct vs DropDuplicate
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+explode, explode_outer
+posexplode, posexplode_outer
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+import com.databricks.spark.xml               ----- to enable the use of XML format
+import com.databricks.spark.xml.util._        ----- to perform util operations on XML
+import com.sun.xml._                          ----- to save data in XML format
+
+Reading XML File ----- spark.read.format("com.databricks.spark.xml").option("rowTag", "record").load(path of XML file)
+
+Saving Data in XML Format ----- df.write.format("com.databricks.spark.xml").option("rootTag", "data").option("rowTag", "record").mode("overwrite").option("nullvalue", "0").save(Path of saving location)
+
+Read Nested XML ----- spark.read.format("com.databricks.spark.xml").option("rootTag", "data").option("rowTag", "record").load(path of XML file)
+                ----- and use explode method to flatten the nested columns
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+PARQUET FORMAT
+
+----- It is a columner file format. It stores a nested dataStructures in a flat columner format 
+
+-- Pros -- Faster read access due to columner format
+        -- Pre builtIn snappy compression hence it takes less memory space in storing
+
+-- cons -- Might be some slowness in writing into parquet files
+        -- Schema Evaluation
+        
+-- When to use -- Requirement of more read operations performed , less writing operations
+               -- Looking for files that takes less memory space when storing
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+If the data is StructType then we can use data.* ti flatten it 
+or if the data is of array or map type then we need to use explode functionality
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+toJSON and from_json
+
+map vs flatMap vs mapValues vs flatMapValues
+
+union/ unionAll vs unionByName
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Broadcast Variable
+
+What?
+----- These are the Read-Only shared variables for reducing the shuffle operations
+----- This allow the programer to keep a Read-Only variable cached on each machine rather than shipping a copy of it with the task
+
+Need?
+----- To reduce the shuffle operations by broadcasting the small datasets across the executors
+----- when we need to join a dataset that is smaller, spark allows you to broadcast the smaller dataset in each stage 
+----- The data that broadcasted is cached in serialized form and deserialized before running each task
+
+When?
+----- when we need to join a dataset that is smaller, spark allows you to broadcast the smaller dataset in each stage
+
+Benefits?
+----- Mainly used for improving the performance
+
+spark.sparkContext.broadcast(data we have to broadcast)
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+cache & persist
+
+Default -----
+cache (RDD) ----- MEMORY_ONLY
+cache (DF) ----- MEMORY_AND_DISK
+
+persist(RDD) ----- MEMORY_ONLY
+persist(DF) ----- MEMORY_ONLY
+
+unpersist(value: Boolean) ----- By default false ----- Ready to unpersist
+                          ----- If true ----- wait until all the blocks are released 
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Storage Levels
+----- Availble in persist()
+
+MEMORY_ONLY
+MEMORY_AND_DISK
+MEMORY_ONLY_SER
+MEMORY_AND_DISK_SER
+DISK_ONLY
+MEMORY_AND_DISK_SER_2
+MEMORY_ONLY_2
+MEMORY_AND_DISK_2
+DISK_ONLY_2
+OFF_HEAP
+
+numbers means no. of replication on number cluster node mainly used for fault tolerancy
+
